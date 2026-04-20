@@ -1,0 +1,9 @@
+.env
+server/.env
+calendar-assistant/server/.env
+node_modules/
+server/node_modules/*
+client/node_modules/*
+.DS_Store
+dist/
+build/
