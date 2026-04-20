@@ -21,6 +21,24 @@ type CalendarEvent = {
   htmlLink?: string;
 };
 
+type MeetingDayStat = {
+  day: string;
+  hours: number;
+  count: number;
+};
+
+type MeetingAnalytics = {
+  totalMeetingHours: number;
+  totalMeetings: number;
+  meetingHeavyDays: MeetingDayStat[];
+};
+
+type MeetingSuggestion = {
+  start: string;
+  end: string;
+  minutes: number;
+};
+
 type ChatRole = "user" | "assistant";
 
 type ChatMessage = { role: ChatRole; content: string };
@@ -32,6 +50,12 @@ function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<MeetingAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<MeetingSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -78,6 +102,53 @@ function App() {
     }
   }, []);
 
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    const timeMin = new Date();
+    const timeMax = new Date(timeMin.getTime() + 7 * 24 * 60 * 60 * 1000);
+    try {
+      const q = new URLSearchParams({
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+      });
+      const data = await fetchJson<MeetingAnalytics>(
+        `/api/calendar/analytics?${q.toString()}`,
+      );
+      setAnalytics(data);
+    } catch (e) {
+      setAnalyticsError(
+        e instanceof Error ? e.message : "Could not load analytics",
+      );
+      setAnalytics(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
+  const loadSuggestions = useCallback(async () => {
+    setSuggestionsLoading(true);
+    setSuggestionsError(null);
+    try {
+      const q = new URLSearchParams({
+        durationMinutes: "30",
+        days: "7",
+        maxSlots: "5",
+      });
+      const data = await fetchJson<{ suggestions: MeetingSuggestion[] }>(
+        `/api/calendar/recommendations?${q.toString()}`,
+      );
+      setSuggestions(data.suggestions);
+    } catch (e) {
+      setSuggestionsError(
+        e instanceof Error ? e.message : "Could not load recommendations",
+      );
+      setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     queueMicrotask(() => {
       void loadMe();
@@ -107,11 +178,15 @@ function App() {
     queueMicrotask(() => {
       if (me?.authenticated) {
         void loadEvents();
+        void loadAnalytics();
+        void loadSuggestions();
       } else {
         setEvents([]);
+        setAnalytics(null);
+        setSuggestions([]);
       }
     });
-  }, [me, loadEvents]);
+  }, [me, loadEvents, loadAnalytics, loadSuggestions]);
 
   const groupedByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -123,6 +198,23 @@ function App() {
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [events]);
+
+  function useSuggestedSlot(slot: MeetingSuggestion) {
+    const startLabel = dayjs(slot.start).format("dddd, MMM D [at] h:mm A");
+    const endLabel = dayjs(slot.end).format("h:mm A");
+    const prompt = [
+      `Use this suggested slot: ${startLabel} to ${endLabel}.`,
+      "Draft a concise scheduling email I can send to Joe, Dan, and Sally.",
+      "Constraints: I prefer mornings blocked for workouts, and I can meet in this proposed window.",
+      "Return a polished subject line and email body.",
+    ].join(" ");
+    setInput(prompt);
+    setChatError(null);
+    const chatInput = document.getElementById("chat-input");
+    if (chatInput instanceof HTMLTextAreaElement) {
+      chatInput.focus();
+    }
+  }
 
   async function sendChat() {
     const trimmed = input.trim();
@@ -230,13 +322,80 @@ function App() {
               <button
                 type="button"
                 className="btn text"
-                onClick={() => void loadEvents()}
+                onClick={() => {
+                  void loadEvents();
+                  void loadAnalytics();
+                  void loadSuggestions();
+                }}
                 disabled={eventsLoading}
               >
                 {eventsLoading ? "Refreshing…" : "Refresh"}
               </button>
             ) : null}
           </div>
+          {connected ? (
+            <div className="analytics-grid">
+              <div className="analytics-card">
+                <div className="analytics-label">Meeting hours (next 7 days)</div>
+                <div className="analytics-value">
+                  {analyticsLoading
+                    ? "…"
+                    : analytics
+                      ? analytics.totalMeetingHours.toFixed(2)
+                      : "--"}
+                </div>
+              </div>
+              <div className="analytics-card">
+                <div className="analytics-label">Timed meetings</div>
+                <div className="analytics-value">
+                  {analyticsLoading ? "…" : analytics?.totalMeetings ?? "--"}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {analyticsError ? <p className="error-text">{analyticsError}</p> : null}
+          {connected && analytics && analytics.meetingHeavyDays.length > 0 ? (
+            <div className="heavy-days">
+              <div className="heavy-days-label">Top meeting-heavy days</div>
+              <ul className="heavy-days-list">
+                {analytics.meetingHeavyDays.slice(0, 3).map((d) => (
+                  <li key={d.day}>
+                    {dayjs(d.day).format("ddd, MMM D")}: {d.hours.toFixed(2)}h ({d.count} meetings)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {connected ? (
+            <div className="recommendations">
+              <div className="heavy-days-label">Suggested 30-minute openings</div>
+              {suggestionsLoading ? (
+                <p className="muted">Loading recommendations…</p>
+              ) : suggestionsError ? (
+                <p className="error-text">{suggestionsError}</p>
+              ) : suggestions.length === 0 ? (
+                <p className="muted">No openings found in standard weekday work hours.</p>
+              ) : (
+                <ul className="suggestion-list">
+                  {suggestions.map((slot) => (
+                    <li key={`${slot.start}-${slot.end}`}>
+                      <span className="suggestion-text">
+                        {dayjs(slot.start).format("ddd, MMM D h:mm A")} - {dayjs(slot.end).format("h:mm A")} ({slot.minutes}m)
+                      </span>
+                      <button
+                        type="button"
+                        className="btn secondary suggestion-use-btn"
+                        onClick={() => useSuggestedSlot(slot)}
+                        disabled={!connected || chatSending}
+                      >
+                        Use this slot
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
           {!connected ? (
             <p className="muted">
               Connect your Google account to load events from your primary

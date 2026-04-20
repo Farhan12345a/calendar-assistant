@@ -8,7 +8,8 @@ import { chatRouter } from "./routes/chat";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
-const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+const clientOrigin =
+  process.env.CLIENT_ORIGIN ?? process.env.FRONTEND_URL ?? "http://localhost:5173";
 
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
