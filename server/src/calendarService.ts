@@ -215,6 +215,15 @@ export type FreeSlot = {
   minutes: number;
 };
 
+export type WeekOptimizationResult = {
+  windowStart: string;
+  windowEnd: string;
+  overloadDays: Array<{ day: string; meetingHours: number; meetingCount: number }>;
+  noFocusDays: Array<{ day: string; longestFreeMinutes: number }>;
+  tightSpacingDays: Array<{ day: string; tightTransitions: number }>;
+  suggestions: string[];
+};
+
 export function suggestMeetingOpenings(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
   options: {
@@ -264,6 +273,124 @@ export function suggestMeetingOpenings(
   }
 
   return slots;
+}
+
+export function optimizeWeekSchedule(
+  events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
+  options: { timeMin: Date; timeMax: Date },
+): WeekOptimizationResult {
+  type TimedEvent = { start: Date; end: Date; day: string };
+  const timedEvents: TimedEvent[] = [];
+  for (const ev of events) {
+    const start = ev.start?.dateTime;
+    const end = ev.end?.dateTime;
+    if (!start || !end) continue;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) continue;
+    if (endDate <= startDate) continue;
+    timedEvents.push({
+      start: startDate,
+      end: endDate,
+      day: startDate.toISOString().slice(0, 10),
+    });
+  }
+
+  const dayMap = new Map<string, TimedEvent[]>();
+  for (const ev of timedEvents) {
+    const list = dayMap.get(ev.day) ?? [];
+    list.push(ev);
+    dayMap.set(ev.day, list);
+  }
+
+  const overloadDays: Array<{ day: string; meetingHours: number; meetingCount: number }> = [];
+  const noFocusDays: Array<{ day: string; longestFreeMinutes: number }> = [];
+  const tightSpacingDays: Array<{ day: string; tightTransitions: number }> = [];
+
+  for (const [day, dayEvents] of dayMap.entries()) {
+    const sorted = [...dayEvents].sort(
+      (a, b) => a.start.getTime() - b.start.getTime(),
+    );
+    const first = sorted[0];
+    if (!first) continue;
+    let totalMinutes = 0;
+    for (const ev of sorted) {
+      totalMinutes += Math.round((ev.end.getTime() - ev.start.getTime()) / 60000);
+    }
+    const meetingHours = roundToTwo(totalMinutes / 60);
+    if (meetingHours >= 5 || sorted.length >= 6) {
+      overloadDays.push({
+        day,
+        meetingHours,
+        meetingCount: sorted.length,
+      });
+    }
+
+    const workStart = new Date(first.start);
+    workStart.setHours(9, 0, 0, 0);
+    const workEnd = new Date(first.start);
+    workEnd.setHours(17, 0, 0, 0);
+    let cursor = workStart;
+    let longestGap = 0;
+    let tightTransitions = 0;
+    for (const ev of sorted) {
+      const gap = Math.floor((ev.start.getTime() - cursor.getTime()) / 60000);
+      if (gap > longestGap) longestGap = gap;
+      if (gap >= 0 && gap <= 10) tightTransitions += 1;
+      if (ev.end > cursor) cursor = ev.end;
+    }
+    const tailGap = Math.floor((workEnd.getTime() - cursor.getTime()) / 60000);
+    if (tailGap > longestGap) longestGap = tailGap;
+
+    if (longestGap < 120) {
+      noFocusDays.push({ day, longestFreeMinutes: Math.max(0, longestGap) });
+    }
+    if (tightTransitions >= 2) {
+      tightSpacingDays.push({ day, tightTransitions });
+    }
+  }
+
+  overloadDays.sort((a, b) => b.meetingHours - a.meetingHours);
+  noFocusDays.sort((a, b) => a.longestFreeMinutes - b.longestFreeMinutes);
+  tightSpacingDays.sort((a, b) => b.tightTransitions - a.tightTransitions);
+
+  const suggestions: string[] = [];
+  const topOverload = overloadDays[0];
+  if (topOverload) {
+    suggestions.push(
+      `Reduce load on ${topOverload.day}: convert 1-2 status meetings to async updates or move lower-priority meetings to lighter days.`,
+    );
+  }
+  const topNoFocus = noFocusDays[0];
+  if (topNoFocus) {
+    suggestions.push(
+      `Protect deep work on ${topNoFocus.day}: block a 2-hour focus window (for example 9:00-11:00) before accepting new meetings.`,
+    );
+  }
+  const topTightSpacing = tightSpacingDays[0];
+  if (topTightSpacing) {
+    suggestions.push(
+      `Add 10-15 minute buffers on ${topTightSpacing.day}: ${topTightSpacing.tightTransitions} meetings are tightly back-to-back.`,
+    );
+  }
+  if (suggestions.length === 0) {
+    suggestions.push(
+      "Calendar is already optimized for this window. No overload days, focus-time gaps, or tight meeting chains were detected.",
+    );
+  } else {
+    suggestions.push(
+      "Optional upgrade: block 3 gym/workout sessions next week (45-60 min each) as recurring calendar holds to protect mornings.",
+    );
+  }
+
+  return {
+    windowStart: options.timeMin.toISOString(),
+    windowEnd: options.timeMax.toISOString(),
+    overloadDays,
+    noFocusDays,
+    tightSpacingDays,
+    suggestions,
+  };
 }
 
 export function formatEventsForPrompt(

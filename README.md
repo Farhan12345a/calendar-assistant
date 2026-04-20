@@ -16,6 +16,12 @@ In addition, this implementation includes:
 
 - Meeting analytics for the next 7 days (meeting hours, count, meeting-heavy days).
 - Suggested 30-minute openings based on free time in standard work hours.
+- "AI Executive Assistant Mode" via **Optimize My Week** (detects overload days, no focus time, tight meeting spacing, and proposes improvements).
+- Optimization results are shown only after clicking **Optimize My Week** (no automatic optimization run on page load).
+- One-click optimization actions with user confirmation:
+  - **Create Focus Block**
+  - **Create Workout Block**
+  - **Add 10-min Buffer**
 - Chat-assisted event creation/update/delete with explicit confirmation phrases:
   - `confirm create meeting`
   - `confirm update meeting`
@@ -106,12 +112,20 @@ cd ../client && npm run build
    - Events under **This week**
    - Meeting analytics cards
    - Suggested 30-minute openings
+   - AI Executive Assistant Mode with **Optimize My Week**
 3. Ask chat:
    - "How much of my time am I spending in meetings this week?"
    - "Draft a concise email to schedule a 30-minute meeting next week; I prefer afternoons."
    - "Update the existing meeting titled 'Planning Day' on 2026-05-02 and ask me to confirm."
    - "Delete the event titled 'Planning Day' on 2026-05-02 and ask me to confirm."
 4. Verify answers reflect your real calendar context.
+5. Click **Optimize My Week**:
+   - If issues exist, verify recommendation text appears.
+   - If no issues exist, verify it explicitly says the calendar is already optimized.
+6. Test one-click optimization actions (each should ask for confirmation before creating holds):
+   - **Create Focus Block**
+   - **Create Workout Block**
+   - **Add 10-min Buffer**
 
 ## API Endpoints (Backend)
 
@@ -122,6 +136,7 @@ cd ../client && npm run build
 - `GET /api/calendar/events`
 - `GET /api/calendar/analytics`
 - `GET /api/calendar/recommendations`
+- `GET /api/calendar/optimize`
 - `POST /api/calendar/events`
 - `PATCH /api/calendar/events/:eventId`
 - `DELETE /api/calendar/events/:eventId`
@@ -147,6 +162,9 @@ cd ../client && npm run build
 
 - Show meeting-hour metric and heavy days.
 - Show suggested 30-minute openings and explain the logic (weekday work-hour free slots).
+- Click **Optimize My Week** and show proactive schedule suggestions (focus blocks, buffer time, workout protection).
+- If no optimization is needed, show the explicit "Calendar is already optimized..." response.
+- Use one action button (for example **Create Focus Block**) and confirm the hold gets created.
 
 ### 5) Agent interaction (2 min)
 

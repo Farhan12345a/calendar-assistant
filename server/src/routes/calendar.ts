@@ -4,6 +4,7 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   fetchCalendarEvents,
+  optimizeWeekSchedule,
   suggestMeetingOpenings,
   updateCalendarEvent,
 } from "../calendarService";
@@ -142,6 +143,35 @@ calendarRouter.get("/recommendations", async (req, res) => {
       return;
     }
     res.status(502).json({ error: "recommendations_fetch_failed" });
+  }
+});
+
+calendarRouter.get("/optimize", async (req, res) => {
+  const oauth = getOAuth2ClientForSession(req.session?.refreshToken);
+  if (!oauth) {
+    res.status(401).json({ error: "not_authenticated" });
+    return;
+  }
+  const now = new Date();
+  const timeMin = req.query.timeMin ? new Date(String(req.query.timeMin)) : now;
+  const timeMax = req.query.timeMax
+    ? new Date(String(req.query.timeMax))
+    : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  if (Number.isNaN(timeMin.getTime()) || Number.isNaN(timeMax.getTime()) || timeMax <= timeMin) {
+    res.status(400).json({ error: "invalid_date_range" });
+    return;
+  }
+  try {
+    const items = await fetchCalendarEvents(oauth, { timeMin, timeMax });
+    const result = optimizeWeekSchedule(items, { timeMin, timeMax });
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    if (isInsufficientScopesError(e)) {
+      res.status(403).json({ error: "insufficient_scopes", action: "reauth_required" });
+      return;
+    }
+    res.status(502).json({ error: "optimization_fetch_failed" });
   }
 });
 

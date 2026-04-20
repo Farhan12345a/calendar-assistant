@@ -39,6 +39,21 @@ type MeetingSuggestion = {
   minutes: number;
 };
 
+type WeekOptimization = {
+  overloadDays: Array<{ day: string; meetingHours: number; meetingCount: number }>;
+  noFocusDays: Array<{ day: string; longestFreeMinutes: number }>;
+  tightSpacingDays: Array<{ day: string; tightTransitions: number }>;
+  suggestions: string[];
+};
+
+type CreatedEventResponse = {
+  id: string;
+  summary: string;
+  htmlLink?: string;
+  start: string;
+  end: string;
+};
+
 type ChatRole = "user" | "assistant";
 
 type ChatMessage = { role: ChatRole; content: string };
@@ -56,6 +71,11 @@ function App() {
   const [suggestions, setSuggestions] = useState<MeetingSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [optimization, setOptimization] = useState<WeekOptimization | null>(null);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
+  const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [optimizationActionLoading, setOptimizationActionLoading] = useState(false);
+  const [hasRunOptimization, setHasRunOptimization] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -149,6 +169,31 @@ function App() {
     }
   }, []);
 
+  const optimizeWeek = useCallback(async () => {
+    setHasRunOptimization(true);
+    setOptimizationLoading(true);
+    setOptimizationError(null);
+    const timeMin = new Date();
+    const timeMax = new Date(timeMin.getTime() + 7 * 24 * 60 * 60 * 1000);
+    try {
+      const q = new URLSearchParams({
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+      });
+      const data = await fetchJson<WeekOptimization>(
+        `/api/calendar/optimize?${q.toString()}`,
+      );
+      setOptimization(data);
+    } catch (e) {
+      setOptimizationError(
+        e instanceof Error ? e.message : "Could not optimize week",
+      );
+      setOptimization(null);
+    } finally {
+      setOptimizationLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     queueMicrotask(() => {
       void loadMe();
@@ -184,6 +229,8 @@ function App() {
         setEvents([]);
         setAnalytics(null);
         setSuggestions([]);
+        setOptimization(null);
+        setHasRunOptimization(false);
       }
     });
   }, [me, loadEvents, loadAnalytics, loadSuggestions]);
@@ -254,6 +301,146 @@ function App() {
     } finally {
       setChatSending(false);
     }
+  }
+
+  async function createCalendarHoldWithConfirm(input: {
+    summary: string;
+    start: string;
+    end: string;
+    description: string;
+    confirmLabel: string;
+  }) {
+    const startLabel = dayjs(input.start).format("ddd, MMM D h:mm A");
+    const endLabel = dayjs(input.end).format("h:mm A");
+    const ok = window.confirm(
+      `${input.confirmLabel}\n\n${input.summary}\n${startLabel} - ${endLabel}`,
+    );
+    if (!ok) return;
+    setOptimizationActionLoading(true);
+    setBanner(null);
+    try {
+      const created = await fetchJson<CreatedEventResponse>("/api/calendar/events", {
+        method: "POST",
+        body: JSON.stringify({
+          summary: input.summary,
+          start: input.start,
+          end: input.end,
+          description: input.description,
+          timeZone,
+        }),
+      });
+      setBanner(
+        `${created.summary} created for ${dayjs(created.start).format("ddd, MMM D h:mm A")}.`,
+      );
+      await Promise.all([loadEvents(), loadAnalytics(), loadSuggestions(), optimizeWeek()]);
+    } catch (e) {
+      setOptimizationError(
+        e instanceof Error ? e.message : "Could not create calendar hold",
+      );
+    } finally {
+      setOptimizationActionLoading(false);
+    }
+  }
+
+  async function createFocusBlockAction() {
+    try {
+      setOptimizationActionLoading(true);
+      const q = new URLSearchParams({
+        durationMinutes: "120",
+        days: "7",
+        maxSlots: "1",
+      });
+      const slotData = await fetchJson<{ suggestions: MeetingSuggestion[] }>(
+        `/api/calendar/recommendations?${q.toString()}`,
+      );
+      const slot = slotData.suggestions[0];
+      if (!slot) {
+        setOptimizationError("No 2-hour opening found in the next 7 days.");
+        return;
+      }
+      await createCalendarHoldWithConfirm({
+        summary: "Focus Block",
+        start: slot.start,
+        end: slot.end,
+        description: "Auto-added by AI Executive Assistant Mode to protect deep work.",
+        confirmLabel: "Create focus block?",
+      });
+    } catch (e) {
+      setOptimizationError(e instanceof Error ? e.message : "Could not create focus block");
+    } finally {
+      setOptimizationActionLoading(false);
+    }
+  }
+
+  async function createWorkoutBlockAction() {
+    try {
+      setOptimizationActionLoading(true);
+      const q = new URLSearchParams({
+        durationMinutes: "60",
+        days: "14",
+        maxSlots: "1",
+      });
+      const slotData = await fetchJson<{ suggestions: MeetingSuggestion[] }>(
+        `/api/calendar/recommendations?${q.toString()}`,
+      );
+      const slot = slotData.suggestions[0];
+      if (!slot) {
+        setOptimizationError("No 60-minute opening found in the next 14 days.");
+        return;
+      }
+      await createCalendarHoldWithConfirm({
+        summary: "Workout / Gym Block",
+        start: slot.start,
+        end: slot.end,
+        description: "Auto-added by AI Executive Assistant Mode to protect personal wellness time.",
+        confirmLabel: "Create workout block?",
+      });
+    } catch (e) {
+      setOptimizationError(e instanceof Error ? e.message : "Could not create workout block");
+    } finally {
+      setOptimizationActionLoading(false);
+    }
+  }
+
+  async function addBufferAction() {
+    const sorted = [...events]
+      .filter((ev) => ev.start.length > 10 && ev.end.length > 10)
+      .sort((a, b) => dayjs(a.start).valueOf() - dayjs(b.start).valueOf());
+    let target:
+      | {
+          start: string;
+          end: string;
+        }
+      | null = null;
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const current = sorted[i];
+      const next = sorted[i + 1];
+      const currentEnd = dayjs(current.end);
+      const nextStart = dayjs(next.start);
+      if (!currentEnd.isValid() || !nextStart.isValid()) continue;
+      if (currentEnd.format("YYYY-MM-DD") !== nextStart.format("YYYY-MM-DD")) continue;
+      const gap = nextStart.diff(currentEnd, "minute");
+      if (gap >= 10) {
+        target = {
+          start: currentEnd.toISOString(),
+          end: currentEnd.add(10, "minute").toISOString(),
+        };
+        break;
+      }
+    }
+    if (!target) {
+      setOptimizationError(
+        "No suitable same-day gap found for a 10-minute buffer between meetings.",
+      );
+      return;
+    }
+    await createCalendarHoldWithConfirm({
+      summary: "Meeting Buffer",
+      start: target.start,
+      end: target.end,
+      description: "Auto-added by AI Executive Assistant Mode to reduce back-to-back fatigue.",
+      confirmLabel: "Create 10-minute meeting buffer?",
+    });
   }
 
   async function logout() {
@@ -333,6 +520,67 @@ function App() {
               </button>
             ) : null}
           </div>
+          {connected ? (
+            <div className="optimize-box">
+              <div className="optimize-header">
+                <div className="heavy-days-label">AI Executive Assistant Mode</div>
+                <button
+                  type="button"
+                  className="btn secondary optimize-btn"
+                  onClick={() => void optimizeWeek()}
+                  disabled={optimizationLoading}
+                >
+                  {optimizationLoading ? "Optimizing..." : "Optimize My Week"}
+                </button>
+              </div>
+              {optimizationError ? (
+                <p className="error-text">{optimizationError}</p>
+              ) : hasRunOptimization && optimization ? (
+                <div className="optimize-content">
+                  <p className="muted">
+                    Detects overload, missing focus time, and tight meeting spacing.
+                  </p>
+                  <div className="optimize-actions">
+                    <button
+                      type="button"
+                      className="btn secondary optimize-action-btn"
+                      onClick={() => void createFocusBlockAction()}
+                      disabled={optimizationActionLoading || optimizationLoading}
+                    >
+                      Create Focus Block
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary optimize-action-btn"
+                      onClick={() => void createWorkoutBlockAction()}
+                      disabled={optimizationActionLoading || optimizationLoading}
+                    >
+                      Create Workout Block
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary optimize-action-btn"
+                      onClick={() => void addBufferAction()}
+                      disabled={optimizationActionLoading || optimizationLoading}
+                    >
+                      Add 10-min Buffer
+                    </button>
+                  </div>
+                  <ul className="suggestion-list">
+                    {optimization.suggestions.map((s, idx) => (
+                      <li key={`${idx}-${s}`}>
+                        <span className="suggestion-text">{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="muted">
+                  Click "Optimize My Week" to analyze your schedule. No changes are made automatically.
+                </p>
+              )}
+            </div>
+          ) : null}
           {connected ? (
             <div className="analytics-grid">
               <div className="analytics-card">

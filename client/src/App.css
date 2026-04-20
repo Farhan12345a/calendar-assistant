@@ -247,6 +247,43 @@
   margin: 10px 0 14px;
 }
 
+.optimize-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg);
+  padding: 12px;
+  margin: 8px 0 14px;
+}
+
+.optimize-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.optimize-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.optimize-content .muted {
+  margin-bottom: 8px;
+}
+
+.optimize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.optimize-action-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .day-list {
   list-style: none;
   margin: 0;
