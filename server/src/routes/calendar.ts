@@ -334,4 +334,9 @@ calendarRouter.delete(
   } catch (e) {
     console.error(e);
     if (isInsufficientScopesError(e)) {
-      res.status(40
+      res.status(403).json({ error: "insufficient_scopes", action: "reauth_required" });
+      return;
+    }
+    res.status(502).json({ error: "calendar_delete_failed" });
+  }
+});
