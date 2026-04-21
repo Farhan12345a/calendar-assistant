@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { Router } from "express";
 import { google } from "googleapis";
+import { oauthStartRateLimiter } from "../middleware/rateLimits";
 import {
   createOAuth2Client,
   getOAuth2ClientForSession,
@@ -18,7 +19,7 @@ const SCOPES = [
 
 export const authRouter = Router();
 
-authRouter.get("/google", (req, res) => {
+authRouter.get("/google", oauthStartRateLimiter, (req, res) => {
   try {
     const oauth2Client = createOAuth2Client();
     const state = randomBytes(32).toString("hex");

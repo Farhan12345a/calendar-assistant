@@ -4,7 +4,6 @@ import { useSearchParams } from "react-router-dom";
 import { fetchJson } from "./api";
 import "./App.css";
 
-//MeResponse: Response type for the user's profile
 type MeResponse =
   | { authenticated: false }
   | {
@@ -14,7 +13,6 @@ type MeResponse =
       picture?: string;
     };
 
-//CalendarEvent: Type for a calendar event
 type CalendarEvent = {
   id: string;
   summary: string;
@@ -23,21 +21,18 @@ type CalendarEvent = {
   htmlLink?: string;
 };
 
-//MeetingDayStat: Type for a meeting day statistic
 type MeetingDayStat = {
   day: string;
   hours: number;
   count: number;
 };
 
-//MeetingAnalytics: Type for a meeting analytics
 type MeetingAnalytics = {
   totalMeetingHours: number;
   totalMeetings: number;
   meetingHeavyDays: MeetingDayStat[];
 };
 
-//MeetingSuggestion: Type for a meeting suggestion
 type MeetingSuggestion = {
   start: string;
   end: string;
@@ -70,7 +65,6 @@ function localDateTimeInputToIso(value: string): string | null {
   return d.toISOString();
 }
 
-//App: Main component for the calendar assistant app
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -107,7 +101,6 @@ function App() {
     [],
   );
 
-  //loadMe: Load the user's profile
   const loadMe = useCallback(async () => {
     setMeError(null);
     try {
@@ -119,7 +112,6 @@ function App() {
     }
   }, []);
 
-  //loadEvents: Load the user's calendar events
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
     setEventsError(null);
@@ -144,7 +136,6 @@ function App() {
     }
   }, []);
 
-  //loadAnalytics: Load the user's calendar analytics
   const loadAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
@@ -155,7 +146,6 @@ function App() {
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
       });
-      //loadAnalytics: Load the user's calendar analytics
       const data = await fetchJson<MeetingAnalytics>(
         `/api/calendar/analytics?${q.toString()}`,
       );
@@ -170,7 +160,6 @@ function App() {
     }
   }, []);
 
-  //loadSuggestions: Load the user's calendar suggestions
   const loadSuggestions = useCallback(async () => {
     setSuggestionsLoading(true);
     setSuggestionsError(null);
@@ -194,7 +183,6 @@ function App() {
     }
   }, []);
 
-  //optimizeWeek: Optimize the user's calendar week
   const optimizeWeek = useCallback(async () => {
     setHasRunOptimization(true);
     setOptimizationLoading(true);
@@ -206,7 +194,6 @@ function App() {
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
       });
-      //optimizeWeek: Optimize the user's calendar week
       const data = await fetchJson<WeekOptimization>(
         `/api/calendar/optimize?${q.toString()}`,
       );
@@ -221,14 +208,12 @@ function App() {
     }
   }, []);
 
-  //useEffect: Load the user's profile
   useEffect(() => {
     queueMicrotask(() => {
       void loadMe();
     });
   }, [loadMe]);
 
-  //useEffect: Handle authentication
   useEffect(() => {
     const auth = searchParams.get("auth");
     const reason = searchParams.get("reason");
@@ -248,7 +233,6 @@ function App() {
     }
   }, [searchParams, setSearchParams, loadMe]);
 
-  //useEffect: Handle calendar events, analytics, and suggestions
   useEffect(() => {
     queueMicrotask(() => {
       if (me?.authenticated) {
@@ -265,7 +249,6 @@ function App() {
     });
   }, [me, loadEvents, loadAnalytics, loadSuggestions]);
 
-  //groupedByDay: Group calendar events by day
   const groupedByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const ev of events) {
@@ -277,7 +260,6 @@ function App() {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [events]);
 
-  //useSuggestedSlot: Use a suggested slot
   function useSuggestedSlot(slot: MeetingSuggestion) {
     const startLabel = dayjs(slot.start).format("dddd, MMM D [at] h:mm A");
     const endLabel = dayjs(slot.end).format("h:mm A");
@@ -295,7 +277,6 @@ function App() {
     }
   }
 
-  //sendChat: Send a chat message
   async function sendChat() {
     const trimmed = input.trim();
     if (!trimmed || chatSending) return;
@@ -312,7 +293,6 @@ function App() {
     setInput("");
     setChatError(null);
     setChatSending(true);
-    //sendChat: Send a chat message
     try {
       const data = await fetchJson<{ reply: string }>("/api/chat", {
         method: "POST",
@@ -336,7 +316,6 @@ function App() {
     }
   }
 
-  //createCalendarHoldWithConfirm: Create a calendar hold with confirmation
   async function createCalendarHoldWithConfirm(input: {
     summary: string;
     start: string;
@@ -376,7 +355,6 @@ function App() {
     }
   }
 
-  //createFocusBlockAction: Create a focus block at the chosen start time for N minutes
   async function createFocusBlockAction() {
     setOptimizationError(null);
     const startIso = localDateTimeInputToIso(focusStartLocal);
@@ -395,7 +373,6 @@ function App() {
     });
   }
 
-  //createWorkoutBlockAction: Create a workout block at the chosen start time for N minutes
   async function createWorkoutBlockAction() {
     setOptimizationError(null);
     const startIso = localDateTimeInputToIso(workoutStartLocal);
@@ -414,7 +391,6 @@ function App() {
     });
   }
 
-  //createCustomBlockAction: User-defined title, start, and length in minutes
   async function createCustomBlockAction() {
     setOptimizationError(null);
     const title = customBlockTitle.trim();
@@ -438,7 +414,6 @@ function App() {
     });
   }
 
-  //logout: Log out
   async function logout() {
     try {
       await fetchJson("/api/logout", { method: "POST", body: "{}" });
@@ -451,10 +426,8 @@ function App() {
     void loadMe();
   }
 
-  //connected: Check if the user is connected
   const connected = me?.authenticated === true;
 
-  //return: Render the app
   return (
     <div className="app-root">
       <header className="app-header">

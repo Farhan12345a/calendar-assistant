@@ -8,16 +8,14 @@ import {
   formatEventsForPrompt,
   updateCalendarEvent,
 } from "../calendarService";
+import { chatRateLimiter } from "../middleware/rateLimits";
 import { getOAuth2ClientForSession } from "../oauthClient";
-//flagship for “LLM + tools + safety.”
-//Routes: /api/chat, /api/calendar/events, /api/calendar/analytics, /api/calendar/recommendations, /api/calendar/optimize, /api/calendar/events/:eventId, /api/calendar/events
 const router = Router();
 
 const MAX_USER_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 12000;
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-//CreateCalendarEventArgs: Input type for creating a new event
 type CreateCalendarEventArgs = {
   summary: string;
   start: string;
@@ -28,7 +26,6 @@ type CreateCalendarEventArgs = {
   timeZone?: string;
 };
 
-//UpdateCalendarEventArgs: Input type for updating an existing event
 type UpdateCalendarEventArgs = {
   eventId?: string;
   currentSummary?: string;
@@ -43,14 +40,12 @@ type UpdateCalendarEventArgs = {
   timeZone?: string;
 };
 
-//DeleteCalendarEventArgs: Input type for deleting an existing event
 type DeleteCalendarEventArgs = {
   eventId?: string;
   summary?: string;
   date?: string;
 };
 
-//parseCreateEventArgs: Parse create event arguments from raw string
 function parseCreateEventArgs(raw: string): CreateCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<CreateCalendarEventArgs>;
@@ -80,28 +75,24 @@ function parseCreateEventArgs(raw: string): CreateCalendarEventArgs | null {
   }
 }
 
-//hasExplicitCreateConfirmation: Check if the user has explicitly confirmed the create event
 function hasExplicitCreateConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm create meeting");
 }
 
-//hasExplicitUpdateConfirmation: Check if the user has explicitly confirmed the update event
 function hasExplicitUpdateConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm update meeting");
 }
 
-//hasExplicitDeleteConfirmation: Check if the user has explicitly confirmed the delete event
 function hasExplicitDeleteConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm delete meeting");
 }
 
-//isValidDateRange: Check if the date range is valid
 function isValidDateRange(start: string, end: string): boolean {
   const startMs = Date.parse(start);
   const endMs = Date.parse(end);
@@ -109,7 +100,6 @@ function isValidDateRange(start: string, end: string): boolean {
   return endMs > startMs;
 }
 
-//parseUpdateEventArgs: Parse update event arguments from raw string
 function parseUpdateEventArgs(raw: string): UpdateCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<UpdateCalendarEventArgs>;
@@ -142,7 +132,6 @@ function parseUpdateEventArgs(raw: string): UpdateCalendarEventArgs | null {
   }
 }
 
-//parseDeleteEventArgs: Parse delete event arguments from raw string
 function parseDeleteEventArgs(raw: string): DeleteCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<DeleteCalendarEventArgs>;
@@ -160,7 +149,6 @@ function parseDeleteEventArgs(raw: string): DeleteCalendarEventArgs | null {
   }
 }
 
-//normalizeErrorMessage: Normalize error message
 function normalizeErrorMessage(err: unknown): string {
   if (!(err instanceof Error)) return "unknown_error";
   const msg = err.message || "unknown_error";
@@ -170,7 +158,6 @@ function normalizeErrorMessage(err: unknown): string {
   return msg;
 }
 
-//parseTimeToMinutes: Parse time to minutes
 function parseTimeToMinutes(value: string): number | null {
   const v = value.trim().toLowerCase();
   const match = v.match(/^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/);
@@ -187,7 +174,6 @@ function parseTimeToMinutes(value: string): number | null {
   return hours * 60 + mins;
 }
 
-//resolveEventIdForDelete: Resolve event id for delete
 async function resolveEventIdForDelete(
   oauth: any,
   args: DeleteCalendarEventArgs,
@@ -207,7 +193,6 @@ async function resolveEventIdForDelete(
   if (args.date) {
     const day = new Date(args.date);
     if (!Number.isNaN(day.getTime())) {
-      // Widen range to avoid timezone boundary misses.
       day.setHours(0, 0, 0, 0);
       timeMin = new Date(day);
       timeMin.setDate(timeMin.getDate() - 2);
@@ -249,7 +234,6 @@ async function resolveEventIdForDelete(
     if (!summaryMatches) return false;
     if (!args.date) return true;
 
-    // All-day events expose yyyy-mm-dd directly.
     if (ev.start?.date && ev.start.date === args.date) return true;
 
     const startDateTime = ev.start?.dateTime ?? "";
@@ -263,7 +247,6 @@ async function resolveEventIdForDelete(
   return { eventId: match.id, summary: match.summary ?? args.summary };
 }
 
-//resolveEventIdForUpdate: Resolve event id for update
 async function resolveEventIdForUpdate(
   oauth: any,
   args: UpdateCalendarEventArgs,
@@ -357,7 +340,6 @@ async function resolveEventIdForUpdate(
   return { eventId: match.id, summary: match.summary ?? args.currentSummary };
 }
 
-//ToolExecutionResult: Result type for tool execution
 type ToolExecutionResult =
   | {
       ok: true;
@@ -375,7 +357,7 @@ type ToolExecutionResult =
       message?: string;
     };
 
-router.post("/chat", async (req, res) => {
+router.post("/chat", chatRateLimiter, async (req, res) => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     res.status(503).json({ error: "openai_not_configured" });

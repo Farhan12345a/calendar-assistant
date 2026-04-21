@@ -2,14 +2,6 @@ import "dotenv/config";
 import { calendar } from "@googleapis/calendar";
 import type { OAuth2Client } from "google-auth-library";
 
-// Google Calendar logic 
-//Business logic is centralized in calendarService so HTTP routes stay thin and the same primitives can power UI + chat.
-//updateCalendarEvent: Update an existing event with summary, start, end, attendees, description, location, and timeZone
-//deleteCalendarEvent: Delete an event by eventId
-//calculateMeetingAnalytics: Calculate total meeting hours, total meetings, and meeting heavy days
-//suggestMeetingOpenings: Suggest free slots for a given time range and duration
-//optimizeWeekSchedule: Optimize the week schedule for a given time range
-
 export async function fetchCalendarEvents(
   auth: OAuth2Client,
   options: { timeMin: Date; timeMax: Date },
@@ -25,7 +17,6 @@ export async function fetchCalendarEvents(
   });
   return res.data.items ?? [];
 }
-//fetchCalendarEvents: List events between timeMin and timeMax (default 7 days from now)
 export type CreateCalendarEventInput = {
   summary: string;
   start: string;
@@ -36,7 +27,6 @@ export type CreateCalendarEventInput = {
   location?: string;
 };
 
-//createCalendarEvent: Create a new event with summary, start, end, attendees, description, location, and timeZone
 export async function createCalendarEvent(
   auth: OAuth2Client,
   input: CreateCalendarEventInput,
@@ -74,7 +64,6 @@ export async function createCalendarEvent(
   });
   return res.data;
 }
-//UpdateCalendarEventInput: Input type for updating an existing event
 export type UpdateCalendarEventInput = {
   eventId: string;
   summary?: string;
@@ -85,7 +74,6 @@ export type UpdateCalendarEventInput = {
   timeZone?: string;
   location?: string;
 };
-//updateCalendarEvent: Update an existing event with summary, start, end, attendees, description, location, and timeZone
 export async function updateCalendarEvent(
   auth: OAuth2Client,
   input: UpdateCalendarEventInput,
@@ -154,7 +142,6 @@ export async function updateCalendarEvent(
   });
   return res.data;
 }
-//deleteCalendarEvent: Delete an event by eventId
 export async function deleteCalendarEvent(
   auth: OAuth2Client,
   eventId: string,
@@ -180,7 +167,6 @@ export type MeetingAnalytics = {
   totalMeetings: number;
   meetingHeavyDays: MeetingDayStat[];
 };
-//calculateMeetingAnalytics: Calculate total meeting hours, total meetings, and meeting heavy days
 export function calculateMeetingAnalytics(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
 ): MeetingAnalytics {
@@ -282,7 +268,6 @@ export function suggestMeetingOpenings(
 
   return slots;
 }
-//optimizeWeekSchedule: Optimize the week schedule for a given time range
 export function optimizeWeekSchedule(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
   options: { timeMin: Date; timeMax: Date },
@@ -400,7 +385,6 @@ export function optimizeWeekSchedule(
     suggestions,
   };
 }
-//formatEventsForPrompt: Format events for a prompt
 export function formatEventsForPrompt(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
   timeZone: string,

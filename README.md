@@ -30,7 +30,7 @@ In addition, this implementation includes:
 ## Tech Stack
 
 - Frontend: React, TypeScript, Vite
-- Backend: Node.js, Express, TypeScript
+- Backend: Node.js, Express, TypeScript, `express-rate-limit` (targeted HTTP throttles)
 - Auth + calendar: Google OAuth2, `google-auth-library`, and `@googleapis/calendar` (Calendar API v3)
 - AI: OpenAI Chat Completions API
 - Session: `cookie-session` with server-side refresh token in session cookie
@@ -105,6 +105,16 @@ cd server && npm run build
 cd ../client && npm run build
 ```
 
+### Lint / static analysis
+
+```bash
+cd server && npm run lint
+cd ../client && npm run lint
+```
+
+- **Server:** `npm run lint` runs **`tsc --noEmit`** (same strict options as `build`, without emitting `dist/`). That is the primary static check for the API.
+- **Client:** ESLint (`eslint.config.js`) for React/TS style and hooks rules.
+
 ### Manual functional test checklist
 
 1. Click **Connect Google Calendar** and complete OAuth.
@@ -142,31 +152,13 @@ cd ../client && npm run build
 - `DELETE /api/calendar/events/:eventId`
 - `POST /api/chat`
 
-## Why This Design
+## Production readiness (take-home scope)
 
-- Fast-to-evaluate architecture: split frontend and backend keeps responsibilities clear.
-- OAuth + session pattern is simple and practical for a take-home.
-- Calendar reads/writes use the generated `@googleapis/calendar` client; OAuth uses `google-auth-library` (with `googleapis` only for the OAuth2 userinfo helper on `/api/me`).
-- Analytics are deterministic on backend, reducing hallucination risk in LLM responses.
-- Chat remains simple but grounded using structured context injection.
+### What is in place
 
-## Trade-offs
-
-- Chosen: explicit confirmation guards for create/update/delete to reduce accidental writes.
-- Not yet included: attendee-level constraint solving, Gmail API draft creation.
-- Chosen: cookie-session for velocity; more robust production setup would use stronger secret management, observability, and rotating credentials.
-
-## Business Impact
-
-- Reduces scheduling overhead and context switching.
-- Gives immediate visibility into meeting load and overload patterns.
-- Speeds communication by drafting schedule-aware messages.
-- Creates foundation for higher-value automation (auto-scheduling and outbound comms).
-
-## Next Steps
-
-- Add Gmail draft creation endpoint and approval UX.
-- Add multi-attendee availability reasoning and ranking.
-- Add persistent user memory/preferences (focus blocks, meeting rules).
-- Add tests (unit tests for analytics/suggestion logic + API integration tests).
-
+- **Modular layout:** HTTP routes stay thin; calendar math, Google calls, and prompt formatting live in `server/src/calendarService.ts`; OAuth wiring in `oauthClient.ts`.
+- **Static analysis:** **Strict TypeScript** on the server (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) plus `npm run lint` → `tsc --noEmit`. The client also runs **ESLint** (`npm run lint` in `client/`).
+- **Edge cases & errors:** Calendar routes return **401** when unauthenticated, **403** when Google reports insufficient scopes (with a reauth hint), **400** for bad inputs, and **502** when upstream calls fail. Chat calendar writes require **explicit confirmation phrases** so the model cannot silently mutate the calendar.
+- **Rate limits (application layer):** `express-rate-limit` guards the costliest / abuse-prone endpoints (defaults suit local dev; tighten in real production):
+  - **`POST /api/chat`** — 24 requests / minute / client IP (OpenAI cost + abuse).
+ 

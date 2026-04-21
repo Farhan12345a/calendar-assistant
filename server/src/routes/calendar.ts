@@ -8,6 +8,7 @@ import {
   suggestMeetingOpenings,
   updateCalendarEvent,
 } from "../calendarService";
+import { calendarWriteRateLimiter } from "../middleware/rateLimits";
 import { getOAuth2ClientForSession } from "../oauthClient";
 
 //Calendar API — read, analyze, recommend, optimize, CRUD
@@ -179,7 +180,7 @@ calendarRouter.get("/optimize", async (req, res) => {
   }
 });
 
-calendarRouter.post("/events", async (req, res) => {
+calendarRouter.post("/events", calendarWriteRateLimiter, async (req, res) => {
   const oauth = getOAuth2ClientForSession(req.session?.refreshToken);
   if (!oauth) {
     res.status(401).json({ error: "not_authenticated" });
@@ -239,7 +240,10 @@ calendarRouter.post("/events", async (req, res) => {
   }
 });
 
-calendarRouter.patch("/events/:eventId", async (req, res) => {
+calendarRouter.patch(
+  "/events/:eventId",
+  calendarWriteRateLimiter,
+  async (req, res) => {
   const oauth = getOAuth2ClientForSession(req.session?.refreshToken);
   if (!oauth) {
     res.status(401).json({ error: "not_authenticated" });
@@ -310,7 +314,10 @@ calendarRouter.patch("/events/:eventId", async (req, res) => {
   }
 });
 
-calendarRouter.delete("/events/:eventId", async (req, res) => {
+calendarRouter.delete(
+  "/events/:eventId",
+  calendarWriteRateLimiter,
+  async (req, res) => {
   const oauth = getOAuth2ClientForSession(req.session?.refreshToken);
   if (!oauth) {
     res.status(401).json({ error: "not_authenticated" });
@@ -327,9 +334,4 @@ calendarRouter.delete("/events/:eventId", async (req, res) => {
   } catch (e) {
     console.error(e);
     if (isInsufficientScopesError(e)) {
-      res.status(403).json({ error: "insufficient_scopes", action: "reauth_required" });
-      return;
-    }
-    res.status(502).json({ error: "calendar_delete_failed" });
-  }
-});
+      res.status(40
