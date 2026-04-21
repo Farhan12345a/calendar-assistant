@@ -273,15 +273,88 @@
 }
 
 .optimize-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   margin-bottom: 10px;
 }
 
-.optimize-action-btn {
-  padding: 6px 10px;
+.optimize-actions-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15.75rem;
+  gap: 12px;
+  align-items: start;
+}
+
+.optimize-row-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.optimize-row-fields--custom {
+  row-gap: 8px;
+}
+
+.optimize-row-input {
   font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+  min-height: 2.375rem;
+}
+
+.optimize-row-input--datetime {
+  min-width: min(100%, 11.5rem);
+  flex: 1 1 11.5rem;
+}
+
+.optimize-row-input--narrow {
+  width: 4.75rem;
+  flex: 0 0 auto;
+}
+
+.optimize-row-input--title {
+  flex: 1 1 10rem;
+  min-width: 7rem;
+}
+
+.optimize-action-btn {
+  width: 100%;
+  min-height: 2.375rem;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  justify-self: stretch;
+}
+
+.optimize-custom-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.optimize-custom-minutes-input {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .optimize-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .optimize-action-btn {
+    width: 100%;
+  }
 }
 
 .day-list {

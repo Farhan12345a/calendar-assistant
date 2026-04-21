@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { fetchJson } from "./api";
 import "./App.css";
 
+//MeResponse: Response type for the user's profile
 type MeResponse =
   | { authenticated: false }
   | {
@@ -13,6 +14,7 @@ type MeResponse =
       picture?: string;
     };
 
+//CalendarEvent: Type for a calendar event
 type CalendarEvent = {
   id: string;
   summary: string;
@@ -21,18 +23,21 @@ type CalendarEvent = {
   htmlLink?: string;
 };
 
+//MeetingDayStat: Type for a meeting day statistic
 type MeetingDayStat = {
   day: string;
   hours: number;
   count: number;
 };
 
+//MeetingAnalytics: Type for a meeting analytics
 type MeetingAnalytics = {
   totalMeetingHours: number;
   totalMeetings: number;
   meetingHeavyDays: MeetingDayStat[];
 };
 
+//MeetingSuggestion: Type for a meeting suggestion
 type MeetingSuggestion = {
   start: string;
   end: string;
@@ -58,6 +63,14 @@ type ChatRole = "user" | "assistant";
 
 type ChatMessage = { role: ChatRole; content: string };
 
+function localDateTimeInputToIso(value: string): string | null {
+  if (!value.trim()) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+//App: Main component for the calendar assistant app
 function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -76,6 +89,13 @@ function App() {
   const [optimizationError, setOptimizationError] = useState<string | null>(null);
   const [optimizationActionLoading, setOptimizationActionLoading] = useState(false);
   const [hasRunOptimization, setHasRunOptimization] = useState(false);
+  const [focusStartLocal, setFocusStartLocal] = useState("");
+  const [focusDurationMin, setFocusDurationMin] = useState(120);
+  const [workoutStartLocal, setWorkoutStartLocal] = useState("");
+  const [workoutDurationMin, setWorkoutDurationMin] = useState(60);
+  const [customBlockTitle, setCustomBlockTitle] = useState("");
+  const [customBlockStartLocal, setCustomBlockStartLocal] = useState("");
+  const [customBlockDurationMin, setCustomBlockDurationMin] = useState(60);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -87,6 +107,7 @@ function App() {
     [],
   );
 
+  //loadMe: Load the user's profile
   const loadMe = useCallback(async () => {
     setMeError(null);
     try {
@@ -98,6 +119,7 @@ function App() {
     }
   }, []);
 
+  //loadEvents: Load the user's calendar events
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
     setEventsError(null);
@@ -122,6 +144,7 @@ function App() {
     }
   }, []);
 
+  //loadAnalytics: Load the user's calendar analytics
   const loadAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     setAnalyticsError(null);
@@ -132,6 +155,7 @@ function App() {
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
       });
+      //loadAnalytics: Load the user's calendar analytics
       const data = await fetchJson<MeetingAnalytics>(
         `/api/calendar/analytics?${q.toString()}`,
       );
@@ -146,6 +170,7 @@ function App() {
     }
   }, []);
 
+  //loadSuggestions: Load the user's calendar suggestions
   const loadSuggestions = useCallback(async () => {
     setSuggestionsLoading(true);
     setSuggestionsError(null);
@@ -169,6 +194,7 @@ function App() {
     }
   }, []);
 
+  //optimizeWeek: Optimize the user's calendar week
   const optimizeWeek = useCallback(async () => {
     setHasRunOptimization(true);
     setOptimizationLoading(true);
@@ -180,6 +206,7 @@ function App() {
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
       });
+      //optimizeWeek: Optimize the user's calendar week
       const data = await fetchJson<WeekOptimization>(
         `/api/calendar/optimize?${q.toString()}`,
       );
@@ -194,12 +221,14 @@ function App() {
     }
   }, []);
 
+  //useEffect: Load the user's profile
   useEffect(() => {
     queueMicrotask(() => {
       void loadMe();
     });
   }, [loadMe]);
 
+  //useEffect: Handle authentication
   useEffect(() => {
     const auth = searchParams.get("auth");
     const reason = searchParams.get("reason");
@@ -219,6 +248,7 @@ function App() {
     }
   }, [searchParams, setSearchParams, loadMe]);
 
+  //useEffect: Handle calendar events, analytics, and suggestions
   useEffect(() => {
     queueMicrotask(() => {
       if (me?.authenticated) {
@@ -235,6 +265,7 @@ function App() {
     });
   }, [me, loadEvents, loadAnalytics, loadSuggestions]);
 
+  //groupedByDay: Group calendar events by day
   const groupedByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const ev of events) {
@@ -246,6 +277,7 @@ function App() {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [events]);
 
+  //useSuggestedSlot: Use a suggested slot
   function useSuggestedSlot(slot: MeetingSuggestion) {
     const startLabel = dayjs(slot.start).format("dddd, MMM D [at] h:mm A");
     const endLabel = dayjs(slot.end).format("h:mm A");
@@ -263,6 +295,7 @@ function App() {
     }
   }
 
+  //sendChat: Send a chat message
   async function sendChat() {
     const trimmed = input.trim();
     if (!trimmed || chatSending) return;
@@ -279,7 +312,7 @@ function App() {
     setInput("");
     setChatError(null);
     setChatSending(true);
-
+    //sendChat: Send a chat message
     try {
       const data = await fetchJson<{ reply: string }>("/api/chat", {
         method: "POST",
@@ -303,6 +336,7 @@ function App() {
     }
   }
 
+  //createCalendarHoldWithConfirm: Create a calendar hold with confirmation
   async function createCalendarHoldWithConfirm(input: {
     summary: string;
     start: string;
@@ -342,107 +376,69 @@ function App() {
     }
   }
 
+  //createFocusBlockAction: Create a focus block at the chosen start time for N minutes
   async function createFocusBlockAction() {
-    try {
-      setOptimizationActionLoading(true);
-      const q = new URLSearchParams({
-        durationMinutes: "120",
-        days: "7",
-        maxSlots: "1",
-      });
-      const slotData = await fetchJson<{ suggestions: MeetingSuggestion[] }>(
-        `/api/calendar/recommendations?${q.toString()}`,
-      );
-      const slot = slotData.suggestions[0];
-      if (!slot) {
-        setOptimizationError("No 2-hour opening found in the next 7 days.");
-        return;
-      }
-      await createCalendarHoldWithConfirm({
-        summary: "Focus Block",
-        start: slot.start,
-        end: slot.end,
-        description: "Auto-added by AI Executive Assistant Mode to protect deep work.",
-        confirmLabel: "Create focus block?",
-      });
-    } catch (e) {
-      setOptimizationError(e instanceof Error ? e.message : "Could not create focus block");
-    } finally {
-      setOptimizationActionLoading(false);
-    }
-  }
-
-  async function createWorkoutBlockAction() {
-    try {
-      setOptimizationActionLoading(true);
-      const q = new URLSearchParams({
-        durationMinutes: "60",
-        days: "14",
-        maxSlots: "1",
-      });
-      const slotData = await fetchJson<{ suggestions: MeetingSuggestion[] }>(
-        `/api/calendar/recommendations?${q.toString()}`,
-      );
-      const slot = slotData.suggestions[0];
-      if (!slot) {
-        setOptimizationError("No 60-minute opening found in the next 14 days.");
-        return;
-      }
-      await createCalendarHoldWithConfirm({
-        summary: "Workout / Gym Block",
-        start: slot.start,
-        end: slot.end,
-        description: "Auto-added by AI Executive Assistant Mode to protect personal wellness time.",
-        confirmLabel: "Create workout block?",
-      });
-    } catch (e) {
-      setOptimizationError(e instanceof Error ? e.message : "Could not create workout block");
-    } finally {
-      setOptimizationActionLoading(false);
-    }
-  }
-
-  async function addBufferAction() {
-    const sorted = [...events]
-      .filter((ev) => ev.start.length > 10 && ev.end.length > 10)
-      .sort((a, b) => dayjs(a.start).valueOf() - dayjs(b.start).valueOf());
-    let target:
-      | {
-          start: string;
-          end: string;
-        }
-      | null = null;
-    for (let i = 0; i < sorted.length - 1; i += 1) {
-      const current = sorted[i];
-      const next = sorted[i + 1];
-      const currentEnd = dayjs(current.end);
-      const nextStart = dayjs(next.start);
-      if (!currentEnd.isValid() || !nextStart.isValid()) continue;
-      if (currentEnd.format("YYYY-MM-DD") !== nextStart.format("YYYY-MM-DD")) continue;
-      const gap = nextStart.diff(currentEnd, "minute");
-      if (gap >= 10) {
-        target = {
-          start: currentEnd.toISOString(),
-          end: currentEnd.add(10, "minute").toISOString(),
-        };
-        break;
-      }
-    }
-    if (!target) {
-      setOptimizationError(
-        "No suitable same-day gap found for a 10-minute buffer between meetings.",
-      );
+    setOptimizationError(null);
+    const startIso = localDateTimeInputToIso(focusStartLocal);
+    if (!startIso) {
+      setOptimizationError("Choose a start date and time for the focus block.");
       return;
     }
+    const mins = Math.max(15, Math.round(focusDurationMin) || 120);
+    const endIso = dayjs(startIso).add(mins, "minute").toISOString();
     await createCalendarHoldWithConfirm({
-      summary: "Meeting Buffer",
-      start: target.start,
-      end: target.end,
-      description: "Auto-added by AI Executive Assistant Mode to reduce back-to-back fatigue.",
-      confirmLabel: "Create 10-minute meeting buffer?",
+      summary: "Focus Block",
+      start: startIso,
+      end: endIso,
+      description: "Auto-added by AI Executive Assistant Mode to protect deep work.",
+      confirmLabel: "Create focus block?",
     });
   }
 
+  //createWorkoutBlockAction: Create a workout block at the chosen start time for N minutes
+  async function createWorkoutBlockAction() {
+    setOptimizationError(null);
+    const startIso = localDateTimeInputToIso(workoutStartLocal);
+    if (!startIso) {
+      setOptimizationError("Choose a start date and time for the workout block.");
+      return;
+    }
+    const mins = Math.max(15, Math.round(workoutDurationMin) || 60);
+    const endIso = dayjs(startIso).add(mins, "minute").toISOString();
+    await createCalendarHoldWithConfirm({
+      summary: "Workout / Gym Block",
+      start: startIso,
+      end: endIso,
+      description: "Auto-added by AI Executive Assistant Mode to protect personal wellness time.",
+      confirmLabel: "Create workout block?",
+    });
+  }
+
+  //createCustomBlockAction: User-defined title, start, and length in minutes
+  async function createCustomBlockAction() {
+    setOptimizationError(null);
+    const title = customBlockTitle.trim();
+    const startIso = localDateTimeInputToIso(customBlockStartLocal);
+    if (!title) {
+      setOptimizationError("Enter a title for the custom block.");
+      return;
+    }
+    if (!startIso) {
+      setOptimizationError("Choose a start date and time for the custom block.");
+      return;
+    }
+    const mins = Math.max(15, Math.round(customBlockDurationMin) || 60);
+    const endIso = dayjs(startIso).add(mins, "minute").toISOString();
+    await createCalendarHoldWithConfirm({
+      summary: title,
+      start: startIso,
+      end: endIso,
+      description: "Added from AI Executive Assistant Mode (custom block).",
+      confirmLabel: "Create this calendar block?",
+    });
+  }
+
+  //logout: Log out
   async function logout() {
     try {
       await fetchJson("/api/logout", { method: "POST", body: "{}" });
@@ -455,8 +451,10 @@ function App() {
     void loadMe();
   }
 
+  //connected: Check if the user is connected
   const connected = me?.authenticated === true;
 
+  //return: Render the app
   return (
     <div className="app-root">
       <header className="app-header">
@@ -541,30 +539,105 @@ function App() {
                     Detects overload, missing focus time, and tight meeting spacing.
                   </p>
                   <div className="optimize-actions">
-                    <button
-                      type="button"
-                      className="btn secondary optimize-action-btn"
-                      onClick={() => void createFocusBlockAction()}
-                      disabled={optimizationActionLoading || optimizationLoading}
-                    >
-                      Create Focus Block
-                    </button>
-                    <button
-                      type="button"
-                      className="btn secondary optimize-action-btn"
-                      onClick={() => void createWorkoutBlockAction()}
-                      disabled={optimizationActionLoading || optimizationLoading}
-                    >
-                      Create Workout Block
-                    </button>
-                    <button
-                      type="button"
-                      className="btn secondary optimize-action-btn"
-                      onClick={() => void addBufferAction()}
-                      disabled={optimizationActionLoading || optimizationLoading}
-                    >
-                      Add 10-min Buffer
-                    </button>
+                    <div className="optimize-actions-grid">
+                      <div className="optimize-row-fields">
+                        <input
+                          type="datetime-local"
+                          className="optimize-row-input optimize-row-input--datetime"
+                          aria-label="Focus block start"
+                          value={focusStartLocal}
+                          onChange={(e) => setFocusStartLocal(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          className="optimize-row-input optimize-row-input--narrow"
+                          min={15}
+                          step={15}
+                          aria-label="Focus block length in minutes"
+                          title="Minutes"
+                          value={focusDurationMin}
+                          onChange={(e) =>
+                            setFocusDurationMin(Number(e.target.value) || 120)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn secondary optimize-action-btn"
+                        onClick={() => void createFocusBlockAction()}
+                        disabled={optimizationActionLoading || optimizationLoading}
+                      >
+                        Create Focus Block
+                      </button>
+                      <div className="optimize-row-fields optimize-row-fields--custom">
+                        <input
+                          type="datetime-local"
+                          className="optimize-row-input optimize-row-input--datetime"
+                          aria-label="Workout block start"
+                          value={workoutStartLocal}
+                          onChange={(e) => setWorkoutStartLocal(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          className="optimize-row-input optimize-row-input--narrow"
+                          min={15}
+                          step={15}
+                          aria-label="Workout block length in minutes"
+                          title="Minutes"
+                          value={workoutDurationMin}
+                          onChange={(e) =>
+                            setWorkoutDurationMin(Number(e.target.value) || 60)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn secondary optimize-action-btn"
+                        onClick={() => void createWorkoutBlockAction()}
+                        disabled={optimizationActionLoading || optimizationLoading}
+                      >
+                        Create Workout Block
+                      </button>
+                      <div className="optimize-row-fields optimize-row-fields--custom">
+                        <input
+                          type="text"
+                          className="optimize-row-input optimize-row-input--title"
+                          placeholder="Title"
+                          aria-label="Custom block title"
+                          value={customBlockTitle}
+                          onChange={(e) => setCustomBlockTitle(e.target.value)}
+                        />
+                        <input
+                          type="datetime-local"
+                          className="optimize-row-input optimize-row-input--datetime"
+                          aria-label="Custom block start"
+                          value={customBlockStartLocal}
+                          onChange={(e) => setCustomBlockStartLocal(e.target.value)}
+                        />
+                      </div>
+                      <div className="optimize-custom-actions">
+                        <button
+                          type="button"
+                          className="btn secondary optimize-action-btn"
+                          onClick={() => void createCustomBlockAction()}
+                          disabled={optimizationActionLoading || optimizationLoading}
+                        >
+                          Add Custom Block
+                        </button>
+                        <input
+                          type="number"
+                          className="optimize-row-input optimize-custom-minutes-input"
+                          min={15}
+                          step={15}
+                          aria-label="Custom block length in minutes"
+                          title="Minutes"
+                          value={customBlockDurationMin}
+                          onChange={(e) =>
+                            setCustomBlockDurationMin(Number(e.target.value) || 60)
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
                   <ul className="suggestion-list">
                     {optimization.suggestions.map((s, idx) => (

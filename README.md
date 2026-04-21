@@ -18,10 +18,10 @@ In addition, this implementation includes:
 - Suggested 30-minute openings based on free time in standard work hours.
 - "AI Executive Assistant Mode" via **Optimize My Week** (detects overload days, no focus time, tight meeting spacing, and proposes improvements).
 - Optimization results are shown only after clicking **Optimize My Week** (no automatic optimization run on page load).
-- One-click optimization actions with user confirmation:
-  - **Create Focus Block**
-  - **Create Workout Block**
-  - **Add 10-min Buffer**
+- Executive Assistant quick actions (each opens a confirmation before creating a calendar hold):
+  - **Create Focus Block** — pick start date/time and duration (minutes).
+  - **Create Workout Block** — same pattern.
+  - **Add Custom Block** — title, start date/time, duration in minutes (minutes field sits under the button).
 - Chat-assisted event creation/update/delete with explicit confirmation phrases:
   - `confirm create meeting`
   - `confirm update meeting`
@@ -31,7 +31,7 @@ In addition, this implementation includes:
 
 - Frontend: React, TypeScript, Vite
 - Backend: Node.js, Express, TypeScript
-- Auth + calendar: Google OAuth2 + Google Calendar API
+- Auth + calendar: Google OAuth2, `google-auth-library`, and `@googleapis/calendar` (Calendar API v3)
 - AI: OpenAI Chat Completions API
 - Session: `cookie-session` with server-side refresh token in session cookie
 
@@ -50,7 +50,7 @@ In addition, this implementation includes:
 
 ```bash
 git clone <your-repo-url>
-cd calendar-assistant
+cd <repository-root>
 
 cd server && npm install
 cd ../client && npm install
@@ -122,10 +122,10 @@ cd ../client && npm run build
 5. Click **Optimize My Week**:
    - If issues exist, verify recommendation text appears.
    - If no issues exist, verify it explicitly says the calendar is already optimized.
-6. Test one-click optimization actions (each should ask for confirmation before creating holds):
-   - **Create Focus Block**
-   - **Create Workout Block**
-   - **Add 10-min Buffer**
+6. After **Optimize My Week**, test the quick actions (each should confirm before creating a hold):
+   - **Create Focus Block** (start + minutes)
+   - **Create Workout Block** (start + minutes)
+   - **Add Custom Block** (title, start, minutes under the button)
 
 ## API Endpoints (Backend)
 
@@ -142,67 +142,11 @@ cd ../client && npm run build
 - `DELETE /api/calendar/events/:eventId`
 - `POST /api/chat`
 
-## Demo Script (6-8 Minutes)
-
-### 1) Problem framing (45s)
-
-"This app helps a user understand and act on their schedule quickly: see upcoming commitments, quantify meeting load, and generate context-aware drafts."
-
-### 2) Auth + trust (1 min)
-
-- Show Google connect flow.
-- Highlight that only needed scopes are requested and calendar is pulled from the authenticated account.
-
-### 3) Calendar visibility (1 min)
-
-- Show grouped weekly events and refresh behavior.
-- Explain this gives immediate schedule awareness.
-
-### 4) Analytics + recommendations (1.5 min)
-
-- Show meeting-hour metric and heavy days.
-- Show suggested 30-minute openings and explain the logic (weekday work-hour free slots).
-- Click **Optimize My Week** and show proactive schedule suggestions (focus blocks, buffer time, workout protection).
-- If no optimization is needed, show the explicit "Calendar is already optimized..." response.
-- Use one action button (for example **Create Focus Block**) and confirm the hold gets created.
-
-### 5) Agent interaction (2 min)
-
-Use prompts like:
-
-- "I have three meetings to schedule next week and want mornings blocked. Draft a short email I can send."
-- "How much of my time is in meetings next week, and how can I reduce it?"
-
-For write action demo:
-
-- Ask: "Schedule Racecar Meeting with Ryan Anderson on April 22, 2026 from 5:30 PM to 6:30 PM, then ask me for confirmation."
-- Then reply: "confirm create meeting"
-- Assistant should create the event and provide confirmation/link.
-
-For update action demo:
-
-- Ask: "Update the existing meeting titled Planning Day on 2026-05-02 to Planning Day / Doug Sync, then ask me to confirm."
-- Then reply: "confirm update meeting"
-- Assistant should update the event and return event id/link details.
-
-For delete action demo:
-
-- Ask: "Delete the event titled Planning Day on 2026-05-02, then ask me to confirm."
-- Then reply: "confirm delete meeting"
-- Assistant should delete the matching event and confirm deletion.
-
-Explain that the model receives both raw upcoming events and computed analytics context.
-
-### 6) Close with trade-offs + next steps (1.5 min)
-
-- Current strength: clear end-to-end product loop (connect -> understand -> act).
-- Current trade-off: write actions are guarded by explicit confirmation phrases for safety, which adds one extra step.
-- Next: Gmail draft API integration, multi-attendee availability search, and richer analytics.
-
 ## Why This Design
 
 - Fast-to-evaluate architecture: split frontend and backend keeps responsibilities clear.
 - OAuth + session pattern is simple and practical for a take-home.
+- Calendar reads/writes use the generated `@googleapis/calendar` client; OAuth uses `google-auth-library` (with `googleapis` only for the OAuth2 userinfo helper on `/api/me`).
 - Analytics are deterministic on backend, reducing hallucination risk in LLM responses.
 - Chat remains simple but grounded using structured context injection.
 

@@ -1,14 +1,21 @@
 import "dotenv/config";
-import { google } from "googleapis";
+import { calendar } from "@googleapis/calendar";
+import type { OAuth2Client } from "google-auth-library";
 
-type GoogleOAuth2Client = InstanceType<typeof google.auth.OAuth2>;
+// Google Calendar logic 
+//Business logic is centralized in calendarService so HTTP routes stay thin and the same primitives can power UI + chat.
+//updateCalendarEvent: Update an existing event with summary, start, end, attendees, description, location, and timeZone
+//deleteCalendarEvent: Delete an event by eventId
+//calculateMeetingAnalytics: Calculate total meeting hours, total meetings, and meeting heavy days
+//suggestMeetingOpenings: Suggest free slots for a given time range and duration
+//optimizeWeekSchedule: Optimize the week schedule for a given time range
 
 export async function fetchCalendarEvents(
-  auth: GoogleOAuth2Client,
+  auth: OAuth2Client,
   options: { timeMin: Date; timeMax: Date },
 ) {
-  const calendar = google.calendar({ version: "v3", auth });
-  const res = await calendar.events.list({
+  const cal = calendar({ version: "v3", auth });
+  const res = await cal.events.list({
     calendarId: "primary",
     timeMin: options.timeMin.toISOString(),
     timeMax: options.timeMax.toISOString(),
@@ -18,7 +25,7 @@ export async function fetchCalendarEvents(
   });
   return res.data.items ?? [];
 }
-
+//fetchCalendarEvents: List events between timeMin and timeMax (default 7 days from now)
 export type CreateCalendarEventInput = {
   summary: string;
   start: string;
@@ -29,11 +36,12 @@ export type CreateCalendarEventInput = {
   location?: string;
 };
 
+//createCalendarEvent: Create a new event with summary, start, end, attendees, description, location, and timeZone
 export async function createCalendarEvent(
-  auth: GoogleOAuth2Client,
+  auth: OAuth2Client,
   input: CreateCalendarEventInput,
 ) {
-  const calendar = google.calendar({ version: "v3", auth });
+  const cal = calendar({ version: "v3", auth });
   const requestBody: {
     summary: string;
     description?: string;
@@ -59,14 +67,14 @@ export async function createCalendarEvent(
     requestBody.attendees = input.attendees.map((email) => ({ email }));
   }
 
-  const res = await calendar.events.insert({
+  const res = await cal.events.insert({
     calendarId: "primary",
     requestBody,
     sendUpdates: "all",
   });
   return res.data;
 }
-
+//UpdateCalendarEventInput: Input type for updating an existing event
 export type UpdateCalendarEventInput = {
   eventId: string;
   summary?: string;
@@ -77,13 +85,13 @@ export type UpdateCalendarEventInput = {
   timeZone?: string;
   location?: string;
 };
-
+//updateCalendarEvent: Update an existing event with summary, start, end, attendees, description, location, and timeZone
 export async function updateCalendarEvent(
-  auth: GoogleOAuth2Client,
+  auth: OAuth2Client,
   input: UpdateCalendarEventInput,
 ) {
-  const calendar = google.calendar({ version: "v3", auth });
-  const existing = await calendar.events.get({
+  const cal = calendar({ version: "v3", auth });
+  const existing = await cal.events.get({
     calendarId: "primary",
     eventId: input.eventId,
   });
@@ -138,7 +146,7 @@ export async function updateCalendarEvent(
     }));
   }
 
-  const res = await calendar.events.update({
+  const res = await cal.events.update({
     calendarId: "primary",
     eventId: input.eventId,
     requestBody,
@@ -146,13 +154,13 @@ export async function updateCalendarEvent(
   });
   return res.data;
 }
-
+//deleteCalendarEvent: Delete an event by eventId
 export async function deleteCalendarEvent(
-  auth: GoogleOAuth2Client,
+  auth: OAuth2Client,
   eventId: string,
 ) {
-  const calendar = google.calendar({ version: "v3", auth });
-  await calendar.events.delete({
+  const cal = calendar({ version: "v3", auth });
+  await cal.events.delete({
     calendarId: "primary",
     eventId,
     sendUpdates: "all",
@@ -172,7 +180,7 @@ export type MeetingAnalytics = {
   totalMeetings: number;
   meetingHeavyDays: MeetingDayStat[];
 };
-
+//calculateMeetingAnalytics: Calculate total meeting hours, total meetings, and meeting heavy days
 export function calculateMeetingAnalytics(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
 ): MeetingAnalytics {
@@ -274,7 +282,7 @@ export function suggestMeetingOpenings(
 
   return slots;
 }
-
+//optimizeWeekSchedule: Optimize the week schedule for a given time range
 export function optimizeWeekSchedule(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
   options: { timeMin: Date; timeMax: Date },
@@ -392,7 +400,7 @@ export function optimizeWeekSchedule(
     suggestions,
   };
 }
-
+//formatEventsForPrompt: Format events for a prompt
 export function formatEventsForPrompt(
   events: Awaited<ReturnType<typeof fetchCalendarEvents>>,
   timeZone: string,

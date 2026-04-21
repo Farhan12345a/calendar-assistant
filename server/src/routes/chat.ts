@@ -9,13 +9,15 @@ import {
   updateCalendarEvent,
 } from "../calendarService";
 import { getOAuth2ClientForSession } from "../oauthClient";
-
+//flagship for “LLM + tools + safety.”
+//Routes: /api/chat, /api/calendar/events, /api/calendar/analytics, /api/calendar/recommendations, /api/calendar/optimize, /api/calendar/events/:eventId, /api/calendar/events
 const router = Router();
 
 const MAX_USER_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 12000;
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+//CreateCalendarEventArgs: Input type for creating a new event
 type CreateCalendarEventArgs = {
   summary: string;
   start: string;
@@ -26,6 +28,7 @@ type CreateCalendarEventArgs = {
   timeZone?: string;
 };
 
+//UpdateCalendarEventArgs: Input type for updating an existing event
 type UpdateCalendarEventArgs = {
   eventId?: string;
   currentSummary?: string;
@@ -40,12 +43,14 @@ type UpdateCalendarEventArgs = {
   timeZone?: string;
 };
 
+//DeleteCalendarEventArgs: Input type for deleting an existing event
 type DeleteCalendarEventArgs = {
   eventId?: string;
   summary?: string;
   date?: string;
 };
 
+//parseCreateEventArgs: Parse create event arguments from raw string
 function parseCreateEventArgs(raw: string): CreateCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<CreateCalendarEventArgs>;
@@ -75,24 +80,28 @@ function parseCreateEventArgs(raw: string): CreateCalendarEventArgs | null {
   }
 }
 
+//hasExplicitCreateConfirmation: Check if the user has explicitly confirmed the create event
 function hasExplicitCreateConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm create meeting");
 }
 
+//hasExplicitUpdateConfirmation: Check if the user has explicitly confirmed the update event
 function hasExplicitUpdateConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm update meeting");
 }
 
+//hasExplicitDeleteConfirmation: Check if the user has explicitly confirmed the delete event
 function hasExplicitDeleteConfirmation(messages: ChatMessage[]): boolean {
   const latestUser = [...messages].reverse().find((m) => m.role === "user");
   if (!latestUser) return false;
   return latestUser.content.toLowerCase().includes("confirm delete meeting");
 }
 
+//isValidDateRange: Check if the date range is valid
 function isValidDateRange(start: string, end: string): boolean {
   const startMs = Date.parse(start);
   const endMs = Date.parse(end);
@@ -100,6 +109,7 @@ function isValidDateRange(start: string, end: string): boolean {
   return endMs > startMs;
 }
 
+//parseUpdateEventArgs: Parse update event arguments from raw string
 function parseUpdateEventArgs(raw: string): UpdateCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<UpdateCalendarEventArgs>;
@@ -132,6 +142,7 @@ function parseUpdateEventArgs(raw: string): UpdateCalendarEventArgs | null {
   }
 }
 
+//parseDeleteEventArgs: Parse delete event arguments from raw string
 function parseDeleteEventArgs(raw: string): DeleteCalendarEventArgs | null {
   try {
     const parsed = JSON.parse(raw) as Partial<DeleteCalendarEventArgs>;
@@ -149,6 +160,7 @@ function parseDeleteEventArgs(raw: string): DeleteCalendarEventArgs | null {
   }
 }
 
+//normalizeErrorMessage: Normalize error message
 function normalizeErrorMessage(err: unknown): string {
   if (!(err instanceof Error)) return "unknown_error";
   const msg = err.message || "unknown_error";
@@ -158,6 +170,7 @@ function normalizeErrorMessage(err: unknown): string {
   return msg;
 }
 
+//parseTimeToMinutes: Parse time to minutes
 function parseTimeToMinutes(value: string): number | null {
   const v = value.trim().toLowerCase();
   const match = v.match(/^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/);
@@ -174,6 +187,7 @@ function parseTimeToMinutes(value: string): number | null {
   return hours * 60 + mins;
 }
 
+//resolveEventIdForDelete: Resolve event id for delete
 async function resolveEventIdForDelete(
   oauth: any,
   args: DeleteCalendarEventArgs,
@@ -249,6 +263,7 @@ async function resolveEventIdForDelete(
   return { eventId: match.id, summary: match.summary ?? args.summary };
 }
 
+//resolveEventIdForUpdate: Resolve event id for update
 async function resolveEventIdForUpdate(
   oauth: any,
   args: UpdateCalendarEventArgs,
@@ -342,6 +357,7 @@ async function resolveEventIdForUpdate(
   return { eventId: match.id, summary: match.summary ?? args.currentSummary };
 }
 
+//ToolExecutionResult: Result type for tool execution
 type ToolExecutionResult =
   | {
       ok: true;

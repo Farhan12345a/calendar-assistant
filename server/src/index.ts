@@ -7,10 +7,13 @@ import { calendarRouter } from "./routes/calendar";
 import { chatRouter } from "./routes/chat";
 
 const app = express();
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || 3001;
 const clientOrigin =
   process.env.CLIENT_ORIGIN ?? process.env.FRONTEND_URL ?? "http://localhost:5173";
 
+
+//Backend entry mounts CORS + cookie session, then routes for auth, session, calendar, and chat
+//Single Express app: OAuth on /auth, API on /api, calendar sub-router, chat on /api/chat
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
   console.warn(

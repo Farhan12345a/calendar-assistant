@@ -10,6 +10,10 @@ import {
 } from "../calendarService";
 import { getOAuth2ClientForSession } from "../oauthClient";
 
+//Calendar API — read, analyze, recommend, optimize, CRUD
+//Routes: /api/calendar/events, /api/calendar/analytics, /api/calendar/recommendations, /api/calendar/optimize, /api/calendar/events/:eventId, /api/calendar/events
+
+
 export const calendarRouter = Router();
 
 function isInsufficientScopesError(error: unknown): boolean {
